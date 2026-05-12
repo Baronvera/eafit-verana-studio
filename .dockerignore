@@ -1,0 +1,12 @@
+node_modules
+.next
+.git
+*.md
+.env*
+docker-compose*.yml
+infra
+scripts
+eafit-challenge-agent-example
+team_b_kubeconfig.yaml
+.github
+.claude

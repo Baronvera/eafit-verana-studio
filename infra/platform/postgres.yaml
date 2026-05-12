@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vas-platform-secrets
+  namespace: team-b
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: "verana-platform-secure-pwd"
+  JWT_SECRET: "your-super-secret-jwt-key"
+  S3_ACCESS_KEY: "minioadmin"
+  S3_SECRET_KEY: "minioadmin"
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vas-postgres
+  namespace: team-b
+spec:
+  serviceName: vas-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vas-postgres
+  template:
+    metadata:
+      labels:
+        app: vas-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vas-platform-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              value: "verana_studio"
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: pgdata
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: csi-cinder-high-speed
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vas-postgres
+  namespace: team-b
+spec:
+  ports:
+    - port: 5432
+      targetPort: 5432
+  selector:
+    app: vas-postgres

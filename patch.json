@@ -1,0 +1,28 @@
+{
+  "spec": {
+    "template": {
+      "spec": {
+        "containers": [
+          {
+            "name": "api",
+            "volumeMounts": [
+              {
+                "mountPath": "/app/apps/api/dist/agents/agents.service.js",
+                "name": "patched-agents-service",
+                "subPath": "agents.service.js"
+              }
+            ]
+          }
+        ],
+        "volumes": [
+          {
+            "name": "patched-agents-service",
+            "configMap": {
+              "name": "patched-agents-service"
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(pnpm --version)",
+      "Bash(powershell.exe:*)",
+      "Bash(kubectl --kubeconfig=/c/Users/gabri/Desktop/Eafitnodo/team_b_kubeconfig.yaml -n team-b get pods)",
+      "Bash(kubectl:*)",
+      "Bash(python3 -c \"import sys,json; data=json.load\\(sys.stdin\\); [print\\(e['name'],'=',e.get\\('value','[secret]'\\)\\) for e in data]\")",
+      "Bash(python3 -c \"import sys,json; [print\\(e['name'],'=',e.get\\('value','[secret]'\\)\\) for e in json.load\\(sys.stdin\\)]\")",
+      "Bash(pnpm --filter api build)",
+      "Bash(docker build:*)",
+      "Bash(docker info:*)",
+      "Bash(docker context ls:*)",
+      "Bash(docker context:*)",
+      "Bash(python3 -c \"import sys,json; [print\\(v['name']\\) for v in json.load\\(sys.stdin\\)]\")",
+      "Bash(python3 -c \"import sys,json; [print\\(v['mountPath'],'->', v.get\\('subPath',''\\)\\) for v in json.load\\(sys.stdin\\)]\")"
+    ]
+  }
+}

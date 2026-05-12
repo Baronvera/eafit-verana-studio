@@ -1,0 +1,35 @@
+node_modules/
+dist/
+.next/
+.env
+*.env.local
+*.env.*.local
+*.log
+.DS_Store
+Thumbs.db
+
+# Kubeconfig / credenciales de cluster
+*kubeconfig*
+*.kubeconfig
+kubeconfig.yaml
+kubeconfig.yml
+
+# Scripts temporales de debug/patch
+patch_*.py
+patch_*.json
+patch_*.js
+patch_*.yaml
+test_k8s*.js
+check_agents.js
+recover_agent.js
+find_stuck_agents.js
+vsagent_patch_*.yaml
+
+# Archivos de trabajo temporales
+query.sql
+qr_code.*
+*.pptx
+*.tsbuildinfo
+
+# Archivos de configuración de agentes con datos de producción
+config.env

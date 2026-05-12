@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vas-web
+  namespace: team-b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vas-web
+  template:
+    metadata:
+      labels:
+        app: vas-web
+    spec:
+      containers:
+        - name: web
+          image: ghcr.io/baronvera/vas-web:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NEXT_PUBLIC_API_URL
+              value: "https://studio.team-b.teams.eafit.testnet.verana.network/api"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vas-web
+  namespace: team-b
+spec:
+  ports:
+    - port: 3000
+      targetPort: 3000
+  selector:
+    app: vas-web
+---
+# Ingress para el API — con path rewrite para strip /api prefix
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vas-api-ingress
+  namespace: team-b
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - studio.team-b.teams.eafit.testnet.verana.network
+      secretName: vas-platform-tls
+  rules:
+    - host: studio.team-b.teams.eafit.testnet.verana.network
+      http:
+        paths:
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: vas-api
+                port:
+                  number: 3000
+---
+# Ingress para el Web — sin rewrite, sirve todo lo demás (/, /_next/*, /login, etc.)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vas-platform-ingress
+  namespace: team-b
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - studio.team-b.teams.eafit.testnet.verana.network
+      secretName: vas-platform-tls
+  rules:
+    - host: studio.team-b.teams.eafit.testnet.verana.network
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: vas-web
+                port:
+                  number: 3000

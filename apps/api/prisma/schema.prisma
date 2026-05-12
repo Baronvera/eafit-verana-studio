@@ -1,0 +1,388 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth & Tenancy ────────────────────────────────────────────────────────────
+
+model User {
+  id                    String        @id @default(uuid())
+  email                 String        @unique
+  passwordHash          String?
+  emailVerified         Boolean       @default(false)
+  emailVerifyToken      String?       @unique
+  emailVerifyExpiresAt  DateTime?
+  resetPasswordToken    String?       @unique
+  resetPasswordExpiresAt DateTime?
+  oauthProvider         String?       // 'google' | 'github'
+  oauthId               String?
+  name                  String?
+  avatarUrl             String?
+  stripeCustomerId      String?
+  subscriptionStatus    String?       @default("free")  // free | pro | enterprise
+  subscriptionId        String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  organizations OrgMember[]
+  ownedOrgs     Organization[]
+  refreshTokens RefreshToken[]
+  invitesSent   OrgInvitation[] @relation("InviteSender")
+
+  @@unique([oauthProvider, oauthId])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ─── Organization ──────────────────────────────────────────────────────────────
+
+model Organization {
+  id         String      @id @default(uuid())
+  name       String
+  country    String
+  registryId String?
+  logoUrl    String?
+  userId     String
+  owner      User        @relation(fields: [userId], references: [id])
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  members     OrgMember[]
+  agents      Agent[]
+  invitations OrgInvitation[]
+}
+
+model OrgMember {
+  id        String   @id @default(uuid())
+  userId    String
+  orgId     String
+  role      OrgRole  @default(VIEWER)
+  createdAt DateTime @default(now())
+
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId])
+}
+
+model OrgInvitation {
+  id        String   @id @default(uuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  invitedBy String
+  sender    User     @relation("InviteSender", fields: [invitedBy], references: [id])
+  email     String
+  role      OrgRole  @default(VIEWER)
+  token     String   @unique
+  expiresAt DateTime
+  accepted  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([orgId])
+  @@index([email])
+}
+
+enum OrgRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+// ─── Agent ─────────────────────────────────────────────────────────────────────
+
+model Agent {
+  id          String        @id @default(uuid())
+  name        String
+  type        String        @default("general")
+  description String?
+  did         String?
+  status      AgentStatus   @default(PENDING)
+  network     AgentNetwork  @default(TESTNET)
+  llmProvider LLMProvider   @default(ANTHROPIC)
+  model       String        @default("claude-3-5-haiku-20241022")
+  prompt      String        @default("You are a helpful AI assistant.")
+  temperature Float         @default(0.7)
+  orgId       String
+  org         Organization  @relation(fields: [orgId], references: [id])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  stack       AgentStack?
+  credentials AgentCredential[]
+  documents   Document[]
+  mcpServers  McpServer[]
+  credTypes   CredentialType[]
+  issuanceFlows  IssuanceFlow[]
+  verificationFlows VerificationFlow[]
+  conversationLogs ConversationLog[]
+  usageRecords     UsageRecord[]
+  mcpInvocationLogs McpInvocationLog[]
+}
+
+enum AgentStatus {
+  PENDING
+  PROVISIONING
+  RUNNING
+  STOPPED
+  ERROR
+}
+
+enum AgentNetwork {
+  DEVNET
+  TESTNET
+  MAINNET
+}
+
+enum LLMProvider {
+  ANTHROPIC
+  OPENAI
+  OLLAMA
+}
+
+// ─── Agent Stack (Docker/K8s) ──────────────────────────────────────────────────
+
+model AgentStack {
+  id                   String  @id @default(uuid())
+  agentId              String  @unique
+  agent                Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  vsAgentContainerId   String?
+  aiAgentContainerId   String?
+  postgresContainerId  String?
+  redisContainerId     String?
+  networkId            String?
+  adminPort            Int?
+  publicPort           Int?
+  domain               String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+// ─── Credentials ───────────────────────────────────────────────────────────────
+
+model AgentCredential {
+  id       String           @id @default(uuid())
+  agentId  String
+  agent    Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  type     AgentCredentialType
+  status   CredentialStatus @default(PENDING)
+  issuedAt DateTime?
+  raw      Json?
+  createdAt DateTime        @default(now())
+
+  @@index([agentId])
+}
+
+enum AgentCredentialType {
+  ORGANIZATION
+  SERVICE
+}
+
+enum CredentialStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+}
+
+// ─── Knowledge Base ────────────────────────────────────────────────────────────
+
+model Document {
+  id         String         @id @default(uuid())
+  agentId    String
+  agent      Agent          @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  name       String
+  size       Int
+  mimetype   String
+  s3Key      String
+  status     DocumentStatus @default(UPLOADING)
+  indexedAt  DateTime?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([agentId])
+}
+
+enum DocumentStatus {
+  UPLOADING
+  INDEXING
+  READY
+  ERROR
+}
+
+// ─── MCP Bridge ────────────────────────────────────────────────────────────────
+
+model McpServer {
+  id             String        @id @default(uuid())
+  agentId        String
+  agent          Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  name           String
+  type           McpServerType @default(SSE)
+  url            String
+  authType       McpAuthType   @default(NONE)
+  encryptedCreds String?
+  status         McpStatus     @default(CONNECTING)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  tools McpTool[]
+  invocationLogs McpInvocationLog[]
+
+  @@index([agentId])
+}
+
+model McpTool {
+  id          String    @id @default(uuid())
+  mcpServerId String
+  mcpServer   McpServer @relation(fields: [mcpServerId], references: [id], onDelete: Cascade)
+  name        String
+  description String
+  inputSchema Json
+  enabled     Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  @@index([mcpServerId])
+}
+
+enum McpServerType {
+  SSE
+  STDIO
+}
+
+enum McpAuthType {
+  NONE
+  API_KEY
+  BEARER
+  OAUTH2
+}
+
+enum McpStatus {
+  CONNECTING
+  CONNECTED
+  ERROR
+  DISCONNECTED
+}
+
+// ─── AnonCreds Credential Types ────────────────────────────────────────────────
+
+model CredentialType {
+  id         String   @id @default(uuid())
+  agentId    String
+  agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  name       String
+  version    String   @default("1.0")
+  attributes Json
+  credDefId  String?
+  vtjscId    String?
+  createdAt  DateTime @default(now())
+
+  issuanceFlows IssuanceFlow[]
+
+  @@index([agentId])
+}
+
+model IssuanceFlow {
+  id           String      @id @default(uuid())
+  agentId      String
+  agent        Agent       @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  credTypeId   String
+  credType     CredentialType @relation(fields: [credTypeId], references: [id])
+  triggerType  TriggerType
+  claimsConfig Json
+  active       Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([agentId])
+}
+
+enum TriggerType {
+  ON_CONNECT
+  ON_AUTH
+  ON_COMMAND
+}
+
+model VerificationFlow {
+  id                 String   @id @default(uuid())
+  agentId            String
+  agent              Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  credDefId          String
+  requestedAttributes Json
+  callbackUrl        String?
+  postAction         String   @default("continue")
+  active             Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([agentId])
+}
+
+// ─── Analytics ─────────────────────────────────────────────────────────────────
+
+model ConversationLog {
+  id             String   @id @default(uuid())
+  agentId        String
+  agent          Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  connectionHash String   // hashed connectionId for privacy
+  role           String   // 'user' | 'agent'
+  content        String
+  tokensUsed     Int      @default(0)
+  satisfactionScore Int?  // 1 (thumbs up) | -1 (thumbs down) | null
+  citedDocIds    Json?    // array of document ids cited
+  createdAt      DateTime @default(now())
+
+  @@index([agentId, createdAt])
+}
+
+model UsageRecord {
+  id             String   @id @default(uuid())
+  agentId        String
+  agent          Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  month          String   // "2026-04" format
+  conversations  Int      @default(0)
+  tokensUsed     Int      @default(0)
+  updatedAt      DateTime @updatedAt
+
+  @@unique([agentId, month])
+  @@index([agentId])
+}
+
+// ─── Billing ───────────────────────────────────────────────────────────────────
+
+model BillingPlan {
+  id                 String @id @default(uuid())
+  name               String @unique // free | pro | enterprise
+  maxAgents          Int    @default(1)
+  maxConversations   Int    @default(100)   // per month, -1 = unlimited
+  maxStorageMb       Int    @default(100)
+  mcpEnabled         Boolean @default(false)
+  stripePriceId      String?
+}
+
+model McpInvocationLog {
+  id         String   @id @default(uuid())
+  agentId    String
+  agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  serverId   String
+  server     McpServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  toolName   String
+  input      Json?
+  output     Json?
+  durationMs Int?
+  error      String?
+  createdAt  DateTime @default(now())
+
+  @@index([agentId, createdAt])
+}

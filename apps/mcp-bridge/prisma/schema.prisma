@@ -1,0 +1,73 @@
+// El MCP Bridge reutiliza la misma base de datos de la plataforma
+// Apunta a DATABASE_URL en .env
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Modelos necesarios (subset del schema principal)
+model McpServer {
+  id             String        @id @default(uuid())
+  agentId        String
+  name           String
+  type           McpServerType @default(SSE)
+  url            String
+  authType       McpAuthType   @default(NONE)
+  encryptedCreds String?
+  status         McpStatus     @default(CONNECTING)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  tools          McpTool[]
+  invocationLogs McpInvocationLog[]
+}
+
+model McpTool {
+  id          String    @id @default(uuid())
+  mcpServerId String
+  mcpServer   McpServer @relation(fields: [mcpServerId], references: [id], onDelete: Cascade)
+  name        String
+  description String
+  inputSchema Json
+  enabled     Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+}
+
+model McpInvocationLog {
+  id          String    @id @default(uuid())
+  agentId     String
+  serverId    String
+  server      McpServer @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  toolName    String
+  input       Json?
+  output      Json?
+  durationMs  Int?
+  error       String?
+  createdAt   DateTime  @default(now())
+
+  @@index([agentId, createdAt])
+}
+
+enum McpServerType {
+  SSE
+  STDIO
+}
+
+enum McpAuthType {
+  NONE
+  API_KEY
+  BEARER
+  OAUTH2
+}
+
+enum McpStatus {
+  CONNECTING
+  CONNECTED
+  ERROR
+  DISCONNECTED
+}

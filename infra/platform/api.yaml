@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vas-api
+  namespace: team-b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vas-api
+  template:
+    metadata:
+      labels:
+        app: vas-api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/baronvera/vas-api:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: vas-platform-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: "postgresql://postgres:$(POSTGRES_PASSWORD)@vas-postgres:5432/verana_studio?schema=public"
+            - name: REDIS_URL
+              value: "redis://vas-redis:6379"
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: vas-platform-secrets
+                  key: JWT_SECRET
+            - name: KUBECONFIG
+              value: "/app/team_b_kubeconfig.yaml"
+            - name: USE_KUBERNETES
+              value: "true"
+            - name: S3_ENDPOINT
+              value: "vas-minio"
+            - name: S3_PORT
+              value: "9000"
+            - name: S3_USE_SSL
+              value: "false"
+            - name: WEB_URL
+              value: "https://studio.team-b.teams.eafit.testnet.verana.network"
+            - name: USE_MOCK_ECS
+              value: "true"
+            - name: AGENT_BASE_DOMAIN
+              value: "team-b.teams.eafit.testnet.verana.network"
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vas-platform-secrets
+                  key: S3_ACCESS_KEY
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: vas-platform-secrets
+                  key: S3_SECRET_KEY
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /app/team_b_kubeconfig.yaml
+              subPath: team_b_kubeconfig.yaml
+      volumes:
+        - name: kubeconfig
+          configMap:
+            name: vas-kubeconfig
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vas-api
+  namespace: team-b
+spec:
+  ports:
+    - port: 3000
+      targetPort: 3000
+  selector:
+    app: vas-api

@@ -1,0 +1,17 @@
+spec:
+  template:
+    spec:
+      containers:
+      - name: vs-agent-901807b2-9165-44e0-bb6b-b19eb9b199ab
+        livenessProbe:
+          httpGet:
+            path: /v1/agent
+            port: 3000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /v1/agent
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 10
